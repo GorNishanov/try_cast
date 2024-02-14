@@ -97,39 +97,40 @@ got '3Baz' i: 1
 
 See implementation for GCC and MSVC using available (but undocumented) APIs https://godbolt.org/z/E8n69xKjs.
 
-## Post Kona 2023 update
+## Simplification post Kona 2023
 
-The following questions were raised during LEWG review.
+Previous revision tentatively proposed a complicated signature imitating the syntax of a catch-parameter, as in `old::try_cast<const std::exception&>(p)`.
+In Kona, we were convinced to simplify the signature to assume catch-by-const-reference no matter what: `std::try_cast<std::exception>(p)`.
 
-**Should `try_cast` take exception_ptr by pointer or reference?**
+- With the old design, there were two ways to simulate catching by const reference: `old::try_cast<const std::exception&>(p)`
+and `old::try_cast<std::exception>(p)`. The new syntax removes that needless variability of style.
+- Users of the old syntax might think they had to write `old::try_cast<const std::exception&>(p)` in order to catch by reference;
+that's unnecessarily verbose and hard to read. The new syntax is short and readable.
+- The old syntax permitted `old::try_cast<std::exception&>(p)` to catch by non-const reference; this is sometimes legitimate but usually it's just an unnecessary violation of const-correctness. Users might omit the `const` out of inattention or laziness. The new syntax always returns `const*`, privileging the common and const-correct case.
+- Users who want to modify the in-flight exception object can still explicitly write `const_cast<std::exception*>(std::try_cast<std::exception>(p))`. The `const_cast` is visible and greppable; this is a good thing.
+- The old syntax permitted nonsensical scenarios such as `old::try_cast<int(&)()>(p)`. Such a catch handler is physically impossible to hit, because you can't throw a function; functions are not objects. The new syntax admits only `old::try_cast<int()>(p)`, which is ill-formed by our new Mandates element because `int()` is not an object type. Similarly, we disallow `old::try_cast<int[5]>(p)` via the Mandates element.
 
-LEWG affirmed that it should be taken by reference
+P2927R0 proposed that `try_cast` should be able to catch pointer types, just like an ordinary catch clause. That is, not only were you allowed to inspect a thrown `Derived` object with `old::try_cast<const Base&>` (which would return a possibly null `const Base*`), you were also allowed to inspect a thrown `Derived*` object with `old::try_cast<const Base*>` (which would return a possibly null `const Base**`). This turned out to be unimplementable. When a catch-handler catches `Derived*` as `Base*`, it may need to adjust the pointer for multiple and/or virtual base classes. The pointer caught by the core language, then, is a temporary. We can't return a `const Base**` pointing to that temporary adjusted pointer, because there's nowhere for the temporary adjusted pointer to live after the call to `try_cast` has returned.
 
-**Should `try_cast` be "permissive" or "strict"?**
+In other words, the new design has a strict invariant: the pointer returned from `try_cast` always points to the in-flight exception object itself. It never points to any other object, such as a temporary or global. Thus, we must disallow:
 
-1. Permissive (as proposed in R0 of this paper):
 ```c++
-try_cast<int>(e) -> const int*
-try_cast<int&>(e) -> const int*
-try_cast<const int&>(e) -> const int*
-try_cast<int[5]>(e) -> int* const*
-try_cast<int*>(e) -> int* const*
-try_cast<int()>(e) -> int(* const*)()
-try_cast<int(*)()>(e) -> int(* const*)()
+    using IntPtr = int*;
+    std::nullptr_t np;
+    auto p = std::make_exception_ptr(np);
+      // The in-flight exception object is of type std::nullptr_t
+    const IntPtr *ex = old::try_cast<IntPtr>(p);
+      // ex cannot possibly point to the in-flight exception object, because the in-flight object is not an IntPtr!
+    try {
+        std::rethrow_exception(p);
+    } catch (const IntPtr& ex) {
+        // OK, ex refers to a temporary that lives only as long as this catch block
+    }
 ```
 
-2. Strict alternative (as was suggested in Kona 2023):
-```c++
-try_cast<int>(e) -> const int*
-try_cast<int*>(e) -> int* const*
-try_cast<int(*)()>(e) -> int(* const*)()
-try_cast<int&>(e)        // ill-formed
-try_cast<const int&>(e)  // ill-formed
-try_cast<int[5]>(e)      // ill-formed
-try_cast<int()>(e)       // ill-formed
-```
+Our solution is simply to extend our Mandates element to also forbid `std::try_cast` with a template argument of pointer or pointer-to-member type; these are the only two kinds of types where a core-language catch-handler parameter would sometimes bind to a temporary, so these are the only kinds of types we need to forbid. Later, we found that [[ScyllaDB](https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151)] had independently implemented the same solution (i.e. explicitly forbid pointer types) in 2022.
 
-In Kona 2023 LEWG selected strict option.
+Throwing pointers is rare — probably unheard of in real code. This does prevent users from using `std::try_cast<const char*>(p)` to inspect the results of `throw "foo"`, which comes up sometimes in example code; but it shouldn't happen in real code.
 
 ## Discussion
 
@@ -236,38 +237,6 @@ scope of this paper.
 **A**: The intent here is to make sure that people who habitually write `catch (const E& e) { ... }` can continue doing it with `try_cast<const E&>`, as opposed to getting a compilation error. This is an error from the category:
 The compiler/library knows what you mean, but, will force you to write exactly as it wants.
 
-### Section added after Kona 2023 EWG session
-
-1. Permissive (as proposed in the paper up to this point):
-```c++
-try_cast<int>(e) -> const int*
-try_cast<int&>(e) -> const int*
-try_cast<const int&>(e) -> const int*
-try_cast<int[5]>(e) -> int* const*
-try_cast<int*>(e) -> int* const*
-try_cast<int()>(e) -> int(* const*)()
-try_cast<int(*)()>(e) -> int(* const*)()
-```
-
-2. Strict alternative (suggested by some in Kona 2023):
-```c++
-try_cast<int>(e) -> const int*
-try_cast<int*>(e) -> int* const*
-try_cast<int(*)()>(e) -> int(* const*)()
-try_cast<int&>(e)        // ill-formed
-try_cast<const int&>(e)  // ill-formed
-try_cast<int[5]>(e)      // ill-formed
-try_cast<int()>(e)       // ill-formed
-```
-
-```c++
-template<class E>
-  const E* try_cast(const exception_ptr& p);
-```
-
-Mandates: E is a complete object type. E is not an array type. E is not a pointer to an incomplete type.<br>
-Returns: A pointer to the exception object referred to by p, if p is not null and a handler of type const E& would be a match [except.handle] for that exception object. Otherwise, `nullptr`.
-
 
 ## Other names considered but rejected
 
@@ -276,7 +245,8 @@ Returns: A pointer to the exception object referred to by p, if p is not null an
 * `try_cast_exception_ptr<E>`
 * `try_cast_exception<E>`
 * `catch_as<E>`
-
+* `exception_cast<E>`
+  
 ## Pattern matching
 
 We expect that `try_cast` will be integrated in the [pattern matching facility](https://wg21.link/p1371) and
@@ -312,6 +282,9 @@ This does not conflict with the `try_cast` facility offered in this paper.
 A version of exception_ptr inspection facilities is deployed widely in Meta as
 a part of Folly's future continuation matching.
 
+ScyllaDB implements almost exactly the wording of this proposal, under the name `try_catch<E>(p)`; see [[ScyllaDB](https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151)]. The only difference is that they return `E*` instead of `const E*`. We hear from them that they don't actually use the mutability for anything; and even if they did, they could add `const_cast` as mentioned above.
+Arthur has implemented P2927R1 `std::try_cast` in his fork of libc++; see [[libc++](https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd)] and [[Godbolt](https://godbolt.org/z/3Y8Gzfr7r)].
+
 ## Proposed wording
 
 ## Proposed wording (relative to n4950)
@@ -324,9 +297,8 @@ as follows:
 exception_ptr current_exception() noexcept;<br>
 [[noreturn]] void rethrow_exception(exception_ptr p);<br>
 <ins>
-template &lt;class T&gt;<br>
-&nbsp;&nbsp;add_pointer_t&lt;const decay_t&lt;T&gt;&gt;<br>
-&nbsp;&nbsp;try_cast(const exception_ptr& p) noexcept;
+template &lt;class E&gt;<br>
+&nbsp;&nbsp;const E* try_cast(const exception_ptr& p) noexcept;
 </ins><br>
 template &lt;class T&gt; [[noreturn]] void throw_with_nested(T&& t);
 </code>
@@ -344,22 +316,22 @@ Add the following paragraph immediately after paragraph 8 of section Exception p
 <div style="margin-left: 30px;">
 <ins>
 template &lt;class T&gt;<br>
-&nbsp;&nbsp;add_pointer_t&lt;const decay_t&lt;T&gt;&gt;<br> 
-&nbsp;&nbsp;try_cast(const exception_ptr& p) noexcept;
+&nbsp;&nbsp;const E* try_cast(const exception_ptr& p) noexcept;
 <br>
-<br><i>Mandates: </i> T is a complete type, or a pointer or lvalue reference to a complete type, or a pointer to <i>cv</i> <code>void</code>.<br>
+<br><i>Mandates:</i> <code>E</code> is a <code>cv</code>-unqualified complete object type. <code>E</code> is not an array type. <code>E</code> is not a pointer or pointer-to-member type. <i>[Note: When E is a pointer or pointer-to-member type, a handler of type const E& can match without binding to the exception object itself. —end note]</i>
+<br>
 <br><i>Returns: </i>
-A pointer to the value stored in the exception_ptr,
-if <code>p != nullptr</code> and a handler <code>catch(decay_t&lt;T&gt;&)</code> would be a
-match [except.handle] for the exception object stored in p.
-Otherwise, returns <code>nullptr</code>.
+A pointer to the exception object referred to by <code>p</code>,
+if <code>p</code> is not null and a handle of type <code>const E&amp;</code> would be a
+match [except.handle] for that exception object.
+Otherwise, <code>nullptr</code>.
 </ins><br>
 <div style="margin-left: 20px;">
 
 </div>
 </div>
 
-
+<!--
 ## Kona 2023 EWG Feedback
 
 Suggestions mentioned but not polled:
@@ -370,13 +342,13 @@ Suggestions mentioned but not polled:
 * Alternatively, give mutable and non-mutable versions depending on the type:
     * `try_cast<int>(eptr) -> const int*`
     * `try_cast<int&>(eptr) -> int*`
-
+-->
 
 ## Acknowledgments
 
 Many thanks to those who provided valuable feedback, among them:
 Aaryaman Sagar,
-Arthur O'Dwyer, Barry Revzin,
+Barry Revzin,
 Gabriel Dos Reis, Jan Wilmans, Joshua Berne, 
 Lee Howes, Lewis Baker, Michael Park, Peter Dimov, Ville Voutilainen, Yedidya Feldblum.
 
@@ -389,6 +361,15 @@ https://wg21.link/p0933 Runtime introspection of exception_ptr
 https://wg21.link/p1066 How to catch an exception_ptr without even try-ing
 
 https://wg21.link/p1371 Pattern Matching
+
+https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151 ScyllaDb
+
+An implementation of try cast and libc++ and matching godbolt:
+
+https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd
+
+https://godbolt.org/z/3Y8Gzfr7r
+
 
 <!--
 get_if
