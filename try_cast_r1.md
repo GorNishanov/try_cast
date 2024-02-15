@@ -315,14 +315,14 @@ Add the following paragraph immediately after paragraph 8 of section Exception p
 <p></p>
 <div style="margin-left: 30px;">
 <ins>
-template &lt;class T&gt;<br>
+template &lt;class E&gt;<br>
 &nbsp;&nbsp;const E* try_cast(const exception_ptr& p) noexcept;
 <br>
-<br><i>Mandates:</i> <code>E</code> is a <code>cv</code>-unqualified complete object type. <code>E</code> is not an array type. <code>E</code> is not a pointer or pointer-to-member type. <i>[Note: When E is a pointer or pointer-to-member type, a handler of type const E& can match without binding to the exception object itself. —end note]</i>
+<br><i>Mandates:</i> <code>E</code> is a <i>cv</i>-unqualified complete object type. <code>E</code> is not an array type. <code>E</code> is not a pointer or pointer-to-member type. <i>[Note: When <code>E</code> is a pointer or pointer-to-member type, a handler of type <code>const E&amp;</code> can match without binding to the exception object itself. —end note]</i>
 <br>
 <br><i>Returns: </i>
 A pointer to the exception object referred to by <code>p</code>,
-if <code>p</code> is not null and a handle of type <code>const E&amp;</code> would be a
+if <code>p</code> is not null and a handler of type <code>const E&amp;</code> would be a
 match [except.handle] for that exception object.
 Otherwise, <code>nullptr</code>.
 </ins><br>
