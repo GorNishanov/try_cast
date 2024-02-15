@@ -132,6 +132,7 @@ Our solution is simply to extend our Mandates element to also forbid `std::try_c
 
 Throwing pointers is rare — probably unheard of in real code. This does prevent users from using `std::try_cast<const char*>(p)` to inspect the results of `throw "foo"`, which comes up sometimes in example code; but it shouldn't happen in real code.
 
+<!--
 ## Discussion
 
 Let's look at existing facilities in the library that serve somewhat similar purpose:
@@ -236,17 +237,8 @@ scope of this paper.
 
 **A**: The intent here is to make sure that people who habitually write `catch (const E& e) { ... }` can continue doing it with `try_cast<const E&>`, as opposed to getting a compilation error. This is an error from the category:
 The compiler/library knows what you mean, but, will force you to write exactly as it wants.
+-->
 
-
-## Other names considered but rejected
-
-* `cast_exception_ptr<E>`
-* `cast_exception<E>`
-* `try_cast_exception_ptr<E>`
-* `try_cast_exception<E>`
-* `catch_as<E>`
-* `exception_cast<E>`
-  
 ## Pattern matching
 
 We expect that `try_cast` will be integrated in the [pattern matching facility](https://wg21.link/p1371) and
@@ -258,18 +250,27 @@ inspect (eptr) {
    <exception> e => { ... }
    nullptr => { puts("no exception"); }
    __ => { puts("some other exception"); }
-} 
+}
 ```
+
+## Other names considered but rejected
+
+* `cast_exception_ptr<E>`
+* `cast_exception<E>`
+* `try_cast_exception_ptr<E>`
+* `try_cast_exception<E>`
+* `catch_as<E>`
+* `exception_cast<E>`
 
 ## Implementation
 
 GCC, MSVC implementation is possible using available (but undocumented) APIs https://godbolt.org/z/ErePMf66h. Implementability was also confirmed by MSVC and libstdc++ implementors.
 
 A similar facility is available in Folly and supports Windows, libstdc++, and libc++ on linux/apple/freebsd.
- 
+
 https://github.com/facebook/folly/blob/v2023.06.26.00/folly/lang/Exception.h
 https://github.com/facebook/folly/blob/v2023.06.26.00/folly/lang/Exception.cpp
- 
+
 Implementation there under the names:
 folly::exception_ptr_get_object
 folly::exception_ptr_get_type
@@ -277,15 +278,14 @@ folly::exception_ptr_get_type
 Extra constraint imposed by MSVC ABI: it doesn't have information stored to do a full dynamic_cast. It can only recover types for which a catch block could potentially match.
 This does not conflict with the `try_cast` facility offered in this paper.
 
+Arthur has implemented P2927R1 `std::try_cast` in his fork of libc++; see [[libc++](https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd)] and [[Godbolt](https://godbolt.org/z/3Y8Gzfr7r)].
+
 ## Usage experience
 
 A version of exception_ptr inspection facilities is deployed widely in Meta as
 a part of Folly's future continuation matching.
 
 ScyllaDB implements almost exactly the wording of this proposal, under the name `try_catch<E>(p)`; see [[ScyllaDB](https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151)]. The only difference is that they return `E*` instead of `const E*`. We hear from them that they don't actually use the mutability for anything; and even if they did, they could add `const_cast` as mentioned above.
-Arthur has implemented P2927R1 `std::try_cast` in his fork of libc++; see [[libc++](https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd)] and [[Godbolt](https://godbolt.org/z/3Y8Gzfr7r)].
-
-## Proposed wording
 
 ## Proposed wording (relative to n4950)
 
@@ -349,7 +349,7 @@ Suggestions mentioned but not polled:
 Many thanks to those who provided valuable feedback, among them:
 Aaryaman Sagar,
 Barry Revzin,
-Gabriel Dos Reis, Jan Wilmans, Joshua Berne, 
+Gabriel Dos Reis, Jan Wilmans, Joshua Berne,
 Lee Howes, Lewis Baker, Michael Park, Peter Dimov, Ville Voutilainen, Yedidya Feldblum.
 
 ## References
@@ -357,7 +357,7 @@ Lee Howes, Lewis Baker, Michael Park, Peter Dimov, Ville Voutilainen, Yedidya Fe
 https://godbolt.org/z/E8n69xKjs (gcc and msvc implementation)
 
 https://wg21.link/p0933 Runtime introspection of exception_ptr
- 
+
 https://wg21.link/p1066 How to catch an exception_ptr without even try-ing
 
 https://wg21.link/p1371 Pattern Matching

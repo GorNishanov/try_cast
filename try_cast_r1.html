@@ -278,78 +278,122 @@ that's unnecessarily verbose and hard to read. The new syntax is short and reada
 </code></pre>
 <p>Our solution is simply to extend our Mandates element to also forbid <code>std::try_cast</code> with a template argument of pointer or pointer-to-member type; these are the only two kinds of types where a core-language catch-handler parameter would sometimes bind to a temporary, so these are the only kinds of types we need to forbid. Later, we found that [<a href="https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151">ScyllaDB</a>] had independently implemented the same solution (i.e. explicitly forbid pointer types) in 2022.</p>
 <p>Throwing pointers is rare — probably unheard of in real code. This does prevent users from using <code>std::try_cast&lt;const char*&gt;(p)</code> to inspect the results of <code>throw &quot;foo&quot;</code>, which comes up sometimes in example code; but it shouldn't happen in real code.</p>
-<h2 id="discussion">Discussion</h2>
-<p>Let's look at existing facilities in the library that serve somewhat similar purpose:</p>
-<p><strong>any_cast:</strong></p>
-<pre><code class="language-c++"><span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; T <span class="hljs-title">any_cast</span><span class="hljs-params">(<span class="hljs-type">const</span> any&amp; operand)</span></span>;
-<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; T <span class="hljs-title">any_cast</span><span class="hljs-params">(any&amp; operand)</span></span>;
-<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; T <span class="hljs-title">any_cast</span><span class="hljs-params">(any&amp;&amp; operand)</span></span>;
+<!--
+## Discussion
 
-<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; <span class="hljs-type">const</span> T* <span class="hljs-title">any_cast</span><span class="hljs-params">(<span class="hljs-type">const</span> any* operand)</span> <span class="hljs-keyword">noexcept</span></span>;
-<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; T* <span class="hljs-title">any_cast</span><span class="hljs-params">(any* operand)</span> <span class="hljs-keyword">noexcept</span></span>;
-</code></pre>
-<p>Last two overloads perform inspection of a stored value and give a pointer to it
-if the typeid matches, otherwise return <code>nullptr</code>.</p>
-<p>The first three, throw <code>bad_any_cast</code> exception if the stored value does not match the requested type.</p>
-<p><strong>get/get_if:</strong></p>
-<pre><code class="language-c++"><span class="hljs-comment">// get forms that takes a reference and throw if the type is not active alternative</span>
-<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T, <span class="hljs-keyword">class</span>... Types&gt; T* <span class="hljs-title">get_if</span><span class="hljs-params">(variant&lt;Types...&gt;* pv)</span> <span class="hljs-keyword">noexcept</span></span>;
-<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T, <span class="hljs-keyword">class</span>... Types&gt; <span class="hljs-type">const</span> T* <span class="hljs-title">get_if</span><span class="hljs-params">(<span class="hljs-type">const</span> variant&lt;Types...&gt;* pv)</span> <span class="hljs-keyword">noexcept</span></span>;
-</code></pre>
-<p>Similarly to <code>any_cast</code>, get and get_if offer throwing versions that take a reference
+Let's look at existing facilities in the library that serve somewhat similar purpose:
+
+**any_cast:**
+
+```c++
+template<class T> T any_cast(const any& operand);
+template<class T> T any_cast(any& operand);
+template<class T> T any_cast(any&& operand);
+
+template<class T> const T* any_cast(const any* operand) noexcept;
+template<class T> T* any_cast(any* operand) noexcept;
+```
+
+Last two overloads perform inspection of a stored value and give a pointer to it
+if the typeid matches, otherwise return `nullptr`.
+
+The first three, throw `bad_any_cast` exception if the stored value does not match the requested type.
+
+**get/get_if:**
+
+```c++
+// get forms that takes a reference and throw if the type is not active alternative
+template<class T, class... Types> T* get_if(variant<Types...>* pv) noexcept;
+template<class T, class... Types> const T* get_if(const variant<Types...>* pv) noexcept;
+```
+
+Similarly to `any_cast`, get and get_if offer throwing versions that take a reference
 to a variant and a non-throwing that take a variant by pointer and return a pointer
-to the value of the requested type or <code>nullptr</code> if it is not an active alternative.</p>
-<p><strong>exception_ptr:</strong></p>
-<p><strong>Q</strong>: Should we follow the the examples above and have two flavors of exception_ptr inspection,
-one that throws if the requested type <code>E</code> is not stored and one that does not.</p>
-<p><strong>A</strong>: No. The goal of this facility is to provide a way to inspect a stored exception value
-without relying on throwing exception.</p>
-<p><strong>Q</strong>: Non-throwing versions of <code>dynamic_cast</code>, <code>any_cast</code> and <code>get_if</code> all take a pointer to a value to be inspected,
-should this API take the pointer as well?</p>
-<p><strong>A</strong>: <code>dynamic_cast</code> and <code>any_cast</code> relies on a distinction on how the value is passed
+to the value of the requested type or `nullptr` if it is not an active alternative.
+
+**exception_ptr:**
+
+**Q**: Should we follow the the examples above and have two flavors of exception_ptr inspection,
+one that throws if the requested type `E` is not stored and one that does not.
+
+**A**: No. The goal of this facility is to provide a way to inspect a stored exception value
+without relying on throwing exception.
+
+**Q**: Non-throwing versions of `dynamic_cast`, `any_cast` and `get_if` all take a pointer to a value to be inspected,
+should this API take the pointer as well?
+
+**A**: `dynamic_cast` and `any_cast` relies on a distinction on how the value is passed
 (by pointer or by reference) to select what semantic to provide. In our case,
-we always perform a conditional access, thus, requiring a pointer would be a needless syntactic noise.</p>
-<p><strong>Q</strong>: The <code>variant</code> and <code>any</code> inspection APIs offers a version that allows both const and
-non const access to the stored value. Should we do the same for <code>exception_ptr</code>?</p>
-<p><strong>A</strong>: No. N4928/[propagation]/7 states that:</p>
-<blockquote>
-<p>For purposes of determining the presence of a data race, operations on exception_ptr objects shall access and modify only the exception_ptr objects themselves and not the exceptions they refer to.</p>
-</blockquote>
-<p>Offering the API flavor that allows mutation of the stored exception
-has potential of injecting a data race. Cpp core guidelines recommend
-catching exception by const reference.</p>
-<p>In this paper we only offer a <code>try_cast</code> API that offer an ability to inspect,
+we always perform a conditional access, thus, requiring a pointer would be a needless syntactic noise.
+
+**Q**: The `variant` and `any` inspection APIs offers a version that allows both const and
+non const access to the stored value. Should we do the same for `exception_ptr`?
+
+**A**: No. N4928/[propagation]/7 states that:
+
+> For purposes of determining the presence of a data race, operations on exception_ptr objects shall access and modify only the exception_ptr objects themselves and not the exceptions they refer to.
+
+Offering the API flavor that allows mutation of the stored exception
+has potential of injecting a data race. Cpp core guidelines recommend 
+catching exception by const reference.
+
+In this paper we only offer a `try_cast` API that offer an ability to inspect, 
 but not modify stored exception. If in the future, we will discover an important use
 case that requires changing the stored exception a different API with lengthier
-and less convenient name, say <code>try_cast_mutable</code> or something along those lines can be added.</p>
-<p>The desire is to offer the simplest name for the most common use case that is a good
-default for the majority of the users.</p>
-<p>Similarly, we chose to specify the desired type in the simplest possible form, i.e:</p>
-<pre><code class="language-sql">auto<span class="hljs-operator">*</span> x <span class="hljs-operator">=</span> try_cast<span class="hljs-operator">&lt;</span>const <span class="hljs-type">int</span><span class="hljs-operator">*</span><span class="hljs-operator">&gt;</span>(eptr); <span class="hljs-operator">/</span><span class="hljs-operator">/</span> <span class="hljs-keyword">no</span>
-auto<span class="hljs-operator">*</span> x <span class="hljs-operator">=</span> try_cast<span class="hljs-operator">&lt;</span><span class="hljs-type">int</span><span class="hljs-operator">*</span><span class="hljs-operator">&gt;</span>(eptr);       <span class="hljs-operator">/</span><span class="hljs-operator">/</span> <span class="hljs-keyword">no</span>
-auto<span class="hljs-operator">*</span> x <span class="hljs-operator">=</span> try_cast<span class="hljs-operator">&lt;</span><span class="hljs-type">int</span><span class="hljs-operator">&gt;</span>(eptr);        <span class="hljs-operator">/</span><span class="hljs-operator">/</span> yes
-</code></pre>
-<p>Thus, the thought process above led to the following API shape:</p>
-<pre><code class="language-c++"><span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
-<span class="hljs-function"><span class="hljs-type">const</span> <span class="hljs-type">decay_t</span>&lt;T&gt;* 
-<span class="hljs-title">try_cast</span><span class="hljs-params">(<span class="hljs-type">const</span> exception_ptr&amp; e)</span> <span class="hljs-keyword">noexcept</span></span>;
-</code></pre>
-<p><strong>Q</strong>: Could we reuse <code>any_cast</code> name?</p>
-<p><strong>A</strong>: No. It encodes <code>any</code> in its name strongly hinting it is meant
-to be used with std::any.</p>
-<p><strong>Q</strong>: Maybe <code>get_if</code> would work?</p>
-<p><strong>A</strong>: Possibly, but, it has slightly different semantics.
-Unlike <code>any_cast</code>, <code>dynamic_cast</code> and offered here <code>try_cast</code> have
-<code>cast</code> in its name, implying that it does not have to be exact match,
-whereas <code>get_if</code> expects the type to be exact match from the list of variant
-alternatives.</p>
-<p>It is possible that in the future, we will have a unifying
+and less convenient name, say `try_cast_mutable` or something along those lines can be added.
+
+The desire is to offer the simplest name for the most common use case that is a good
+default for the majority of the users.
+
+Similarly, we chose to specify the desired type in the simplest possible form, i.e:
+
+```sql
+auto* x = try_cast<const int*>(eptr); // no
+auto* x = try_cast<int*>(eptr);       // no
+auto* x = try_cast<int>(eptr);        // yes
+```
+
+Thus, the thought process above led to the following API shape:
+
+```c++
+template <typename T>
+const decay_t<T>* 
+try_cast(const exception_ptr& e) noexcept;
+```
+
+**Q**: Could we reuse `any_cast` name?
+
+**A**: No. It encodes `any` in its name strongly hinting it is meant
+to be used with std::any.
+
+**Q**: Maybe `get_if` would work?
+
+**A**: Possibly, but, it has slightly different semantics.
+Unlike `any_cast`, `dynamic_cast` and offered here `try_cast` have
+`cast` in its name, implying that it does not have to be exact match,
+whereas `get_if` expects the type to be exact match from the list of variant
+alternatives.
+
+It is possible that in the future, we will have a unifying
 facility (pattern matching, for example) that would allow uniform access across
 variant, any, exception_ptr and other types. Finding such facility is out of
-scope of this paper.</p>
-<p><strong>Q</strong>: Why <code>const std::decay_t&lt;T&gt;*</code> in the return value? Could it be just T*?</p>
-<p><strong>A</strong>: The intent here is to make sure that people who habitually write <code>catch (const E&amp; e) { ... }</code> can continue doing it with <code>try_cast&lt;const E&amp;&gt;</code>, as opposed to getting a compilation error. This is an error from the category:
-The compiler/library knows what you mean, but, will force you to write exactly as it wants.</p>
+scope of this paper.
+
+**Q**: Why `const std::decay_t<T>*` in the return value? Could it be just T*?
+
+**A**: The intent here is to make sure that people who habitually write `catch (const E& e) { ... }` can continue doing it with `try_cast<const E&>`, as opposed to getting a compilation error. This is an error from the category:
+The compiler/library knows what you mean, but, will force you to write exactly as it wants.
+-->
+<h2 id="pattern-matching">Pattern matching</h2>
+<p>We expect that <code>try_cast</code> will be integrated in the <a href="https://wg21.link/p1371">pattern matching facility</a> and
+will allow inspection of <code>exception_ptr</code> as follows:</p>
+<pre><code class="language-c++"><span class="hljs-built_in">inspect</span> (eptr) {
+   &lt;logic_error&gt; e =&gt; { ... }
+   &lt;exception&gt; e =&gt; { ... }
+   <span class="hljs-literal">nullptr</span> =&gt; { <span class="hljs-built_in">puts</span>(<span class="hljs-string">&quot;no exception&quot;</span>); }
+   __ =&gt; { <span class="hljs-built_in">puts</span>(<span class="hljs-string">&quot;some other exception&quot;</span>); }
+}
+</code></pre>
 <h2 id="other-names-considered-but-rejected">Other names considered but rejected</h2>
 <ul>
 <li><code>cast_exception_ptr&lt;E&gt;</code></li>
@@ -359,16 +403,6 @@ The compiler/library knows what you mean, but, will force you to write exactly a
 <li><code>catch_as&lt;E&gt;</code></li>
 <li><code>exception_cast&lt;E&gt;</code></li>
 </ul>
-<h2 id="pattern-matching">Pattern matching</h2>
-<p>We expect that <code>try_cast</code> will be integrated in the <a href="https://wg21.link/p1371">pattern matching facility</a> and
-will allow inspection of <code>exception_ptr</code> as follows:</p>
-<pre><code class="language-c++"><span class="hljs-built_in">inspect</span> (eptr) {
-   &lt;logic_error&gt; e =&gt; { ... }
-   &lt;exception&gt; e =&gt; { ... }
-   <span class="hljs-literal">nullptr</span> =&gt; { <span class="hljs-built_in">puts</span>(<span class="hljs-string">&quot;no exception&quot;</span>); }
-   __ =&gt; { <span class="hljs-built_in">puts</span>(<span class="hljs-string">&quot;some other exception&quot;</span>); }
-} 
-</code></pre>
 <h2 id="implementation">Implementation</h2>
 <p>GCC, MSVC implementation is possible using available (but undocumented) APIs <a href="https://godbolt.org/z/ErePMf66h">https://godbolt.org/z/ErePMf66h</a>. Implementability was also confirmed by MSVC and libstdc++ implementors.</p>
 <p>A similar facility is available in Folly and supports Windows, libstdc++, and libc++ on linux/apple/freebsd.</p>
@@ -379,12 +413,11 @@ folly::exception_ptr_get_object
 folly::exception_ptr_get_type</p>
 <p>Extra constraint imposed by MSVC ABI: it doesn't have information stored to do a full dynamic_cast. It can only recover types for which a catch block could potentially match.
 This does not conflict with the <code>try_cast</code> facility offered in this paper.</p>
+<p>Arthur has implemented P2927R1 <code>std::try_cast</code> in his fork of libc++; see [<a href="https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd">libc++</a>] and [<a href="https://godbolt.org/z/3Y8Gzfr7r">Godbolt</a>].</p>
 <h2 id="usage-experience">Usage experience</h2>
 <p>A version of exception_ptr inspection facilities is deployed widely in Meta as
 a part of Folly's future continuation matching.</p>
-<p>ScyllaDB implements almost exactly the wording of this proposal, under the name <code>try_catch&lt;E&gt;(p)</code>; see [<a href="https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151">ScyllaDB</a>]. The only difference is that they return <code>E*</code> instead of <code>const E*</code>. We hear from them that they don't actually use the mutability for anything; and even if they did, they could add <code>const_cast</code> as mentioned above.
-Arthur has implemented P2927R1 <code>std::try_cast</code> in his fork of libc++; see [<a href="https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd">libc++</a>] and [<a href="https://godbolt.org/z/3Y8Gzfr7r">Godbolt</a>].</p>
-<h2 id="proposed-wording">Proposed wording</h2>
+<p>ScyllaDB implements almost exactly the wording of this proposal, under the name <code>try_catch&lt;E&gt;(p)</code>; see [<a href="https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151">ScyllaDB</a>]. The only difference is that they return <code>E*</code> instead of <code>const E*</code>. We hear from them that they don't actually use the mutability for anything; and even if they did, they could add <code>const_cast</code> as mentioned above.</p>
 <h2 id="proposed-wording-relative-to-n4950">Proposed wording (relative to n4950)</h2>
 <p>In section [exception.syn] add definition for <code>try_cast</code>
 as follows:</p>
