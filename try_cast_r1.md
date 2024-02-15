@@ -22,7 +22,7 @@ border-collapse: collapse;
 }
 </style>
 
-| Document Number: | d2927r1            |
+| Document Number: | p2927r1            |
 | ---------------- | ------------------ |
 | Date:            | 2024-02-14         |
 | Target:          | LEWG               |
