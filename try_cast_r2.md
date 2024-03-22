@@ -53,12 +53,12 @@ the earlier feedback.
 
 ## Proposal at a glance
 
-We introduce a single function `try_cast` that takes `std::exception_ptr` as an argument `e` and returns a pointer to an object referred to by `e`. 
+We introduce a single function `exception_ptr_cast` that takes `std::exception_ptr` as an argument `e` and returns a pointer to an object referred to by `e`. 
 
 ```c++
 template <typename T>
 const T* 
-try_cast(const exception_ptr& e) noexcept;
+exception_ptr_cast(const exception_ptr& e) noexcept;
 ```
 
 **Example:**
@@ -79,11 +79,11 @@ The execution of the following program
 ```c++
 int main() {
     const auto exp = std::make_exception_ptr(Baz());
-    if (auto* x = std::try_cast<Baz>(exp))
+    if (auto* x = std::exception_ptr_cast<Baz>(exp))
         printf("got '%s' i: %d j: %d\n", typeid(*x).name(), x->i, x->j); 
-    if (auto* x = std::try_cast<Bar>(exp))
+    if (auto* x = std::exception_ptr_cast<Bar>(exp))
         printf("got '%s' i: %d j: %d\n", typeid(*x).name(), x->i, x->j);
-    if (auto* x = std::try_cast<Foo>(exp))
+    if (auto* x = std::exception_ptr_cast<Foo>(exp))
         printf("got '%s' i: %d\n", typeid(*x).name(), x->i);
 }
 ```
@@ -99,27 +99,27 @@ See implementation for GCC and MSVC using available (but undocumented) APIs http
 
 ## Simplification post Kona 2023
 
-Previous revision tentatively proposed a complicated signature imitating the syntax of a catch-parameter, as in `old::try_cast<const std::exception&>(p)`.
-In Kona, we were convinced to simplify the signature to assume catch-by-const-reference no matter what: `std::try_cast<std::exception>(p)`.
+Previous revision tentatively proposed a complicated signature imitating the syntax of a catch-parameter, as in `old::exception_ptr_cast<const std::exception&>(p)`.
+In Kona, we were convinced to simplify the signature to assume catch-by-const-reference no matter what: `std::exception_ptr_cast<std::exception>(p)`.
 
-- With the old design, there were two ways to simulate catching by const reference: `old::try_cast<const std::exception&>(p)`
-and `old::try_cast<std::exception>(p)`. The new syntax removes that needless variability of style.
-- Users of the old syntax might think they had to write `old::try_cast<const std::exception&>(p)` in order to catch by reference;
+- With the old design, there were two ways to simulate catching by const reference: `old::exception_ptr_cast<const std::exception&>(p)`
+and `old::exception_ptr_cast<std::exception>(p)`. The new syntax removes that needless variability of style.
+- Users of the old syntax might think they had to write `old::exception_ptr_cast<const std::exception&>(p)` in order to catch by reference;
 that's unnecessarily verbose and hard to read. The new syntax is short and readable.
-- The old syntax permitted `old::try_cast<std::exception&>(p)` to catch by non-const reference; this is sometimes legitimate but usually it's just an unnecessary violation of const-correctness. Users might omit the `const` out of inattention or laziness. The new syntax always returns `const*`, privileging the common and const-correct case.
-- Users who want to modify the in-flight exception object can still explicitly write `const_cast<std::exception*>(std::try_cast<std::exception>(p))`. The `const_cast` is visible and greppable; this is a good thing.
-- The old syntax permitted nonsensical scenarios such as `old::try_cast<int(&)()>(p)`. Such a catch handler is physically impossible to hit, because you can't throw a function; functions are not objects. The new syntax admits only `old::try_cast<int()>(p)`, which is ill-formed by our new Mandates element because `int()` is not an object type. Similarly, we disallow `old::try_cast<int[5]>(p)` via the Mandates element.
+- The old syntax permitted `old::exception_ptr_cast<std::exception&>(p)` to catch by non-const reference; this is sometimes legitimate but usually it's just an unnecessary violation of const-correctness. Users might omit the `const` out of inattention or laziness. The new syntax always returns `const*`, privileging the common and const-correct case.
+- Users who want to modify the in-flight exception object can still explicitly write `const_cast<std::exception*>(std::exception_ptr_cast<std::exception>(p))`. The `const_cast` is visible and greppable; this is a good thing.
+- The old syntax permitted nonsensical scenarios such as `old::exception_ptr_cast<int(&)()>(p)`. Such a catch handler is physically impossible to hit, because you can't throw a function; functions are not objects. The new syntax admits only `old::exception_ptr_cast<int()>(p)`, which is ill-formed by our new Mandates element because `int()` is not an object type. Similarly, we disallow `old::exception_ptr_cast<int[5]>(p)` via the Mandates element.
 
-P2927R0 proposed that `try_cast` should be able to catch pointer types, just like an ordinary catch clause. That is, not only were you allowed to inspect a thrown `Derived` object with `old::try_cast<const Base&>` (which would return a possibly null `const Base*`), you were also allowed to inspect a thrown `Derived*` object with `old::try_cast<const Base*>` (which would return a possibly null `const Base**`). This turned out to be unimplementable. When a catch-handler catches `Derived*` as `Base*`, it may need to adjust the pointer for multiple and/or virtual base classes. The pointer caught by the core language, then, is a temporary. We can't return a `const Base**` pointing to that temporary adjusted pointer, because there's nowhere for the temporary adjusted pointer to live after the call to `try_cast` has returned.
+P2927R0 proposed that `exception_ptr_cast` should be able to catch pointer types, just like an ordinary catch clause. That is, not only were you allowed to inspect a thrown `Derived` object with `old::exception_ptr_cast<const Base&>` (which would return a possibly null `const Base*`), you were also allowed to inspect a thrown `Derived*` object with `old::exception_ptr_cast<const Base*>` (which would return a possibly null `const Base**`). This turned out to be unimplementable. When a catch-handler catches `Derived*` as `Base*`, it may need to adjust the pointer for multiple and/or virtual base classes. The pointer caught by the core language, then, is a temporary. We can't return a `const Base**` pointing to that temporary adjusted pointer, because there's nowhere for the temporary adjusted pointer to live after the call to `exception_ptr_cast` has returned.
 
-In other words, the new design has a strict invariant: the pointer returned from `try_cast` always points to the in-flight exception object itself. It never points to any other object, such as a temporary or global. Thus, we must disallow:
+In other words, the new design has a strict invariant: the pointer returned from `exception_ptr_cast` always points to the in-flight exception object itself. It never points to any other object, such as a temporary or global. Thus, we must disallow:
 
 ```c++
     using IntPtr = int*;
     std::nullptr_t np;
     auto p = std::make_exception_ptr(np);
       // The in-flight exception object is of type std::nullptr_t
-    const IntPtr *ex = old::try_cast<IntPtr>(p);
+    const IntPtr *ex = old::exception_ptr_cast<IntPtr>(p);
       // ex cannot possibly point to the in-flight exception object, because the in-flight object is not an IntPtr!
     try {
         std::rethrow_exception(p);
@@ -128,9 +128,9 @@ In other words, the new design has a strict invariant: the pointer returned from
     }
 ```
 
-Our solution is simply to extend our Mandates element to also forbid `std::try_cast` with a template argument of pointer or pointer-to-member type; these are the only two kinds of types where a core-language catch-handler parameter would sometimes bind to a temporary, so these are the only kinds of types we need to forbid. Later, we found that [[ScyllaDB](https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151)] had independently implemented the same solution (i.e. explicitly forbid pointer types) in 2022.
+Our solution is simply to extend our Mandates element to also forbid `std::exception_ptr_cast` with a template argument of pointer or pointer-to-member type; these are the only two kinds of types where a core-language catch-handler parameter would sometimes bind to a temporary, so these are the only kinds of types we need to forbid. Later, we found that [[ScyllaDB](https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151)] had independently implemented the same solution (i.e. explicitly forbid pointer types) in 2022.
 
-Throwing pointers is rare — probably unheard of in real code. This does prevent users from using `std::try_cast<const char*>(p)` to inspect the results of `throw "foo"`, which comes up sometimes in example code; but it shouldn't happen in real code.
+Throwing pointers is rare — probably unheard of in real code. This does prevent users from using `std::exception_ptr_cast<const char*>(p)` to inspect the results of `throw "foo"`, which comes up sometimes in example code; but it shouldn't happen in real code.
 
 <!--
 ## Discussion
@@ -191,7 +191,7 @@ Offering the API flavor that allows mutation of the stored exception
 has potential of injecting a data race. Cpp core guidelines recommend 
 catching exception by const reference.
 
-In this paper we only offer a `try_cast` API that offer an ability to inspect, 
+In this paper we only offer a `exception_ptr_cast` API that offer an ability to inspect, 
 but not modify stored exception. If in the future, we will discover an important use
 case that requires changing the stored exception a different API with lengthier
 and less convenient name, say `try_cast_mutable` or something along those lines can be added.
@@ -202,9 +202,9 @@ default for the majority of the users.
 Similarly, we chose to specify the desired type in the simplest possible form, i.e:
 
 ```sql
-auto* x = try_cast<const int*>(eptr); // no
-auto* x = try_cast<int*>(eptr);       // no
-auto* x = try_cast<int>(eptr);        // yes
+auto* x = exception_ptr_cast<const int*>(eptr); // no
+auto* x = exception_ptr_cast<int*>(eptr);       // no
+auto* x = exception_ptr_cast<int>(eptr);        // yes
 ```
 
 Thus, the thought process above led to the following API shape:
@@ -212,7 +212,7 @@ Thus, the thought process above led to the following API shape:
 ```c++
 template <typename T>
 const decay_t<T>* 
-try_cast(const exception_ptr& e) noexcept;
+exception_ptr_cast(const exception_ptr& e) noexcept;
 ```
 
 **Q**: Could we reuse `any_cast` name?
@@ -223,7 +223,7 @@ to be used with std::any.
 **Q**: Maybe `get_if` would work?
 
 **A**: Possibly, but, it has slightly different semantics.
-Unlike `any_cast`, `dynamic_cast` and offered here `try_cast` have
+Unlike `any_cast`, `dynamic_cast` and offered here `exception_ptr_cast` have
 `cast` in its name, implying that it does not have to be exact match,
 whereas `get_if` expects the type to be exact match from the list of variant
 alternatives.
@@ -235,13 +235,13 @@ scope of this paper.
 
 **Q**: Why `const std::decay_t<T>*` in the return value? Could it be just T*?
 
-**A**: The intent here is to make sure that people who habitually write `catch (const E& e) { ... }` can continue doing it with `try_cast<const E&>`, as opposed to getting a compilation error. This is an error from the category:
+**A**: The intent here is to make sure that people who habitually write `catch (const E& e) { ... }` can continue doing it with `exception_ptr_cast<const E&>`, as opposed to getting a compilation error. This is an error from the category:
 The compiler/library knows what you mean, but, will force you to write exactly as it wants.
 -->
 
 ## Pattern matching
 
-We expect that `try_cast` will be integrated in the [pattern matching facility](https://wg21.link/p1371) and
+We expect that `exception_ptr_cast` will be integrated in the [pattern matching facility](https://wg21.link/p1371) and
 will allow inspection of `exception_ptr` as follows:
 
 ```c++
@@ -276,9 +276,9 @@ folly::exception_ptr_get_object
 folly::exception_ptr_get_type
 
 Extra constraint imposed by MSVC ABI: it doesn't have information stored to do a full dynamic_cast. It can only recover types for which a catch block could potentially match.
-This does not conflict with the `try_cast` facility offered in this paper.
+This does not conflict with the `exception_ptr_cast` facility offered in this paper.
 
-Arthur has implemented P2927R1 `std::try_cast` in his fork of libc++; see [[libc++](https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd)] and [[Godbolt](https://godbolt.org/z/3Y8Gzfr7r)].
+Arthur has implemented P2927R1 `std::exception_ptr_cast` in his fork of libc++; see [[libc++](https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd)] and [[Godbolt](https://godbolt.org/z/3Y8Gzfr7r)].
 
 ## Usage experience
 
@@ -289,7 +289,7 @@ ScyllaDB implements almost exactly the wording of this proposal, under the name 
 
 ## Proposed wording (relative to n4950)
 
-In section [exception.syn] add definition for `try_cast`
+In section [exception.syn] add definition for `exception_ptr_cast`
 as follows:
 
 <div style="margin-left: 30px;">
@@ -298,7 +298,7 @@ exception_ptr current_exception() noexcept;<br>
 [[noreturn]] void rethrow_exception(exception_ptr p);<br>
 <ins>
 template &lt;class E&gt;<br>
-&nbsp;&nbsp;const E* try_cast(const exception_ptr& p) noexcept;
+&nbsp;&nbsp;const E* exception_ptr_cast(const exception_ptr& p) noexcept;
 </ins><br>
 template &lt;class T&gt; [[noreturn]] void throw_with_nested(T&& t);
 </code>
@@ -307,7 +307,7 @@ template &lt;class T&gt; [[noreturn]] void throw_with_nested(T&& t);
 Modify paragraph 7 of section Exception propagation [propagation] as follows:
 <p></p>
 <div style="margin-left: 30px;">
-For purposes of determining the presence of a data race, operations on <code>exception_ptr</code> objects shall access and modify only the <code>exception_ptr</code> objects themselves and not the exceptions they refer to. Use of <code>rethrow_exception</code> <ins>or <code>try_cast</code></ins>
+For purposes of determining the presence of a data race, operations on <code>exception_ptr</code> objects shall access and modify only the <code>exception_ptr</code> objects themselves and not the exceptions they refer to. Use of <code>rethrow_exception</code> <ins>or <code>exception_ptr_cast</code></ins>
 on <code>exception_ptr</code> objects that refer to the same exception object shall not introduce a data race.
 </div>
 <br>
@@ -316,7 +316,7 @@ Add the following paragraph immediately after paragraph 8 of section Exception p
 <div style="margin-left: 30px;">
 <ins>
 template &lt;class E&gt;<br>
-&nbsp;&nbsp;const E* try_cast(const exception_ptr& p) noexcept;
+&nbsp;&nbsp;const E* exception_ptr_cast(const exception_ptr& p) noexcept;
 <br>
 <br><i>Mandates:</i> <code>E</code> is a <i>cv</i>-unqualified complete object type. <code>E</code> is not an array type. <code>E</code> is not a pointer or pointer-to-member type. <i>[Note: When <code>E</code> is a pointer or pointer-to-member type, a handler of type <code>const E&amp;</code> can match without binding to the exception object itself. —end note]</i>
 <br>
@@ -336,12 +336,12 @@ Otherwise, <code>nullptr</code>.
 
 Suggestions mentioned but not polled:
 
-* Add a note that to modify the stored exception, one can use `const_cast`. For example: `const_cast<int*>(try_cast<int>(eptr))`. (This was mentioned as an alternative to having dedicated `mutable_try_cast`).
-* Make `try_cast<int[5]>` or `try_cast<void(int)>` ill-formed
-* Make `try_cast<int&>` ill-formed
+* Add a note that to modify the stored exception, one can use `const_cast`. For example: `const_cast<int*>(exception_ptr_cast<int>(eptr))`. (This was mentioned as an alternative to having dedicated `mutable_try_cast`).
+* Make `exception_ptr_cast<int[5]>` or `exception_ptr_cast<void(int)>` ill-formed
+* Make `exception_ptr_cast<int&>` ill-formed
 * Alternatively, give mutable and non-mutable versions depending on the type:
-    * `try_cast<int>(eptr) -> const int*`
-    * `try_cast<int&>(eptr) -> int*`
+    * `exception_ptr_cast<int>(eptr) -> const int*`
+    * `exception_ptr_cast<int&>(eptr) -> int*`
 -->
 
 ## Acknowledgments
@@ -428,7 +428,7 @@ f<int>
 
 mutable_try_cast - unnecessary
 
-const_cast<int*>(try_cast<int>(eptr))
+const_cast<int*>(exception_ptr_cast<int>(eptr))
 
 
 -->
