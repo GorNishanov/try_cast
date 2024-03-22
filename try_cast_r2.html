@@ -446,8 +446,9 @@ will allow inspection of <code>exception_ptr</code> as follows:</p>
    __ =&gt; { <span class="hljs-built_in">puts</span>(<span class="hljs-string">&quot;some other exception&quot;</span>); }
 }
 </code></pre>
-<h2 id="other-names-considered-but-rejected">Other names considered but rejected</h2>
+<h2 id="other-names-considered">Other names considered</h2>
 <ul>
+<li><code>try_cast&lt;E&gt;</code></li>
 <li><code>cast_exception_ptr&lt;E&gt;</code></li>
 <li><code>cast_exception&lt;E&gt;</code></li>
 <li><code>try_cast_exception_ptr&lt;E&gt;</code></li>
@@ -455,6 +456,14 @@ will allow inspection of <code>exception_ptr</code> as follows:</p>
 <li><code>catch_as&lt;E&gt;</code></li>
 <li><code>exception_cast&lt;E&gt;</code></li>
 </ul>
+<p>Based on the recent discussion on LEWG mattermost on March 22, 2024, the two top names favored were:</p>
+<ul>
+<li><code>exception_ptr_cast</code></li>
+<li><code>exception_ptr</code></li>
+</ul>
+<p>This revision optimistically chosen the first alternative,
+as it seemed to get more likes, but, the authors will gladly rename the facility to
+any LEWG approved name.</p>
 <h2 id="implementation">Implementation</h2>
 <p>GCC, MSVC implementation is possible using available (but undocumented) APIs <a href="https://godbolt.org/z/ErePMf66h">https://godbolt.org/z/ErePMf66h</a>. Implementability was also confirmed by MSVC and libstdc++ implementors.</p>
 <p>A similar facility is available in Folly and supports Windows, libstdc++, and libc++ on linux/apple/freebsd.</p>
@@ -520,19 +529,16 @@ Add:
 </div>
 <!--
 ## Kona 2023 EWG Feedback
-<p>Suggestions mentioned but not polled:</p>
-<ul>
-<li>Add a note that to modify the stored exception, one can use <code>const_cast</code>. For example: <code>const_cast&lt;int*&gt;(exception_ptr_cast&lt;int&gt;(eptr))</code>. (This was mentioned as an alternative to having dedicated <code>mutable_try_cast</code>).</li>
-<li>Make <code>exception_ptr_cast&lt;int[5]&gt;</code> or <code>exception_ptr_cast&lt;void(int)&gt;</code> ill-formed</li>
-<li>Make <code>exception_ptr_cast&lt;int&amp;&gt;</code> ill-formed</li>
-<li>Alternatively, give mutable and non-mutable versions depending on the type:
-<ul>
-<li><code>exception_ptr_cast&lt;int&gt;(eptr) -&gt; const int*</code></li>
-<li><code>exception_ptr_cast&lt;int&amp;&gt;(eptr) -&gt; int*</code>
---&gt;</li>
-</ul>
-</li>
-</ul>
+
+Suggestions mentioned but not polled:
+
+* Add a note that to modify the stored exception, one can use `const_cast`. For example: `const_cast<int*>(exception_ptr_cast<int>(eptr))`. (This was mentioned as an alternative to having dedicated `mutable_try_cast`).
+* Make `exception_ptr_cast<int[5]>` or `exception_ptr_cast<void(int)>` ill-formed
+* Make `exception_ptr_cast<int&>` ill-formed
+* Alternatively, give mutable and non-mutable versions depending on the type:
+    * `exception_ptr_cast<int>(eptr) -> const int*`
+    * `exception_ptr_cast<int&>(eptr) -> int*`
+-->
 <h2 id="acknowledgments">Acknowledgments</h2>
 <p>Many thanks to those who provided valuable feedback, among them:
 Aaryaman Sagar,
@@ -548,7 +554,7 @@ Lee Howes, Lewis Baker, Michael Park, Peter Dimov, Ville Voutilainen, Yedidya Fe
 <p>An implementation of try cast and libc++ and matching godbolt:</p>
 <p><a href="https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd">https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd</a></p>
 <p><a href="https://godbolt.org/z/3Y8Gzfr7r">https://godbolt.org/z/3Y8Gzfr7r</a></p>
-<p><a href="https://open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1676r0.pdf">https://open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1676r0.pdf</a></p>
+<p><a href="https://wg21.link/p1676">https://wg21.link/p1676</a> Optimizing exceptions</p>
 <!--
 get_if
 
