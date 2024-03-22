@@ -320,14 +320,24 @@ inspect (eptr) {
 }
 ```
 
-## Other names considered but rejected
+## Other names considered
 
+* `try_cast<E>`
 * `cast_exception_ptr<E>`
 * `cast_exception<E>`
 * `try_cast_exception_ptr<E>`
 * `try_cast_exception<E>`
 * `catch_as<E>`
 * `exception_cast<E>`
+
+Based on the recent discussion on LEWG mattermost on March 22, 2024, the two top names favored were:
+
+* `exception_ptr_cast`
+* `exception_ptr`
+
+This revision optimistically chosen the first alternative,
+as it seemed to get more likes, but, the authors will gladly rename the facility to
+any LEWG approved name.
 
 ## Implementation
 
@@ -402,9 +412,11 @@ Otherwise, <code>nullptr</code>.
 <br><br>
 Add:
 <br>
+
 <div style="margin-left: 20px;">
 <ins>#define __cpp_lib_exception_ptr_cast   202403L // also in &lt;exception&gt;</ins>
 </div>
+
 <!--
 ## Kona 2023 EWG Feedback
 
@@ -444,7 +456,7 @@ https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee84
 
 https://godbolt.org/z/3Y8Gzfr7r
 
-https://open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1676r0.pdf
+https://wg21.link/p1676 Optimizing exceptions
 
 
 <!--
