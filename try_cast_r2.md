@@ -105,6 +105,65 @@ got '3Baz' i: 1
 
 See implementation for GCC and MSVC using available (but undocumented) APIs https://godbolt.org/z/E8n69xKjs.
 
+## Motivation
+
+In asynchronous programming, errors frequently
+travel packaged in an `exception_ptr`. For example, see: `std::future`, `boost::future`, nvidia's `exec::task`, `Folly::Future`, `libunifex::task`, `ppl::task`, etc.
+
+However, exception_ptr itself is an opaque type and
+to get to the exact error stored requires
+rethrow and catch.
+
+The facility offered here allows getting access to
+the stored error that is significantly (100x) faster.
+While theoretically, some exception patterns could
+be optimized by the compilers (see https://wg21.link/p1676),
+no major compiler has implemented any of these
+optimizations since C++ existed.
+
+### Before 
+
+Consider a read_harder routine that wraps an async_read to retry on certain failures upto a limit.
+
+```c++
+task<int> read_harder(my::channel<int>& q) {
+    for (int attempt = 0;; ++attempt) {
+        try {
+            co_return co_await q.async_read();
+        }
+        catch (const std::system_error& e) {
+            if (e.code() == errc::device_or_resource_busy && attempt < 10)
+              continue;
+
+            throw;
+        }
+    }
+}
+```
+
+With the offered facility we can implement the same logic without
+having to rethrow and catch.
+
+### After
+
+```c++
+task<int> read_harder(my::channel<int>& q) {
+    for (int attempt = 0;; ++attempt) {
+        auto result = co_await q.async_read().as_expected();
+        if (result)
+           co_return *result;
+
+        if (auto* e = std::exception_ptr_cast<system_error>(result.error());
+           e->code() == errc::device_or_resource_busy && attempt < 10)
+           continue;
+
+        std::rethrow_exception(result.error());
+    }
+}
+```
+Similar code size, but, significantly faster. This code assumes the existence of an adapter algorithm that converts `sender<T>` to `sender<expected<T, exception_ptr>>`
+
+
 ## Simplification post Kona 2023
 
 Previous revision tentatively proposed a complicated signature imitating the syntax of a catch-parameter, as in `old::exception_ptr_cast<const std::exception&>(p)`.
@@ -384,6 +443,8 @@ An implementation of try cast and libc++ and matching godbolt:
 https://github.com/Quuxplusone/llvm-project/commit/6e20a0b9d5a2280bfab8ab42bee841cfbcc4a8bd
 
 https://godbolt.org/z/3Y8Gzfr7r
+
+https://open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1676r0.pdf
 
 
 <!--
