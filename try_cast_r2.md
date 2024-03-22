@@ -22,7 +22,7 @@ border-collapse: collapse;
 }
 </style>
 
-| Document Number: | d2927r2            |
+| Document Number: | p2927r2            |
 | ---------------- | ------------------ |
 | Date:            | 2024-03-22         |
 | Target:          | LEWG               |
@@ -32,7 +32,7 @@ border-collapse: collapse;
 
 # Inspecting exception_ptr
 
-## Abstract 
+## Abstract
 
 Provide facility to observe exceptions stored in `std::exception_ptr` without throwing or catching exceptions.
 
