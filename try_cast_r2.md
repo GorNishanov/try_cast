@@ -22,11 +22,11 @@ border-collapse: collapse;
 }
 </style>
 
-| Document Number: | p2927r1            |
+| Document Number: | d2927r2            |
 | ---------------- | ------------------ |
-| Date:            | 2024-02-14         |
+| Date:            | 2024-03-22         |
 | Target:          | LEWG               |
-| Revises:         | p2927r0            |
+| Revises:         | p2927r1            |
 | Reply to:        | Arthur O'Dwyer (arthur.j.odwyer@gmail.com), Gor Nishanov (gorn@microsoft.com) |
 
 
