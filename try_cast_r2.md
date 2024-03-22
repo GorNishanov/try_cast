@@ -333,7 +333,7 @@ inspect (eptr) {
 Based on the recent discussion on LEWG mattermost on March 22, 2024, the two top names favored were:
 
 * `exception_ptr_cast`
-* `exception_ptr`
+* `exception_cast`
 
 This revision optimistically chosen the first alternative,
 as it seemed to get more likes, but, the authors will gladly rename the facility to
