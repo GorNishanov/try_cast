@@ -51,6 +51,14 @@ in 2023 Kona meeting.
 This paper brings back exception_ptr inspection facility in a simplified form addressing
 the earlier feedback.
 
+## Revision history
+
+**r0** - restart the proposal in a simplified form
+
+**r1** - implement "strict" behavior (`exception_ptr_cast<logic_error>`, as opposed to also allowing cv-ref qualified types, as in `exception_ptr_cast<const logic_error&>`, for example)
+
+**r2** - rename to `exception_ptr_cast`, add motivation section, add feature test macro.
+
 ## Proposal at a glance
 
 We introduce a single function `exception_ptr_cast` that takes `std::exception_ptr` as an argument `e` and returns a pointer to an object referred to by `e`. 
@@ -330,7 +338,14 @@ Otherwise, <code>nullptr</code>.
 
 </div>
 </div>
-
+<br>
+<b>[version.syn]</b>
+<br><br>
+Add:
+<br>
+<div style="margin-left: 20px;">
+<ins>#define __cpp_lib_exception_ptr_cast   202403L // also in &lt;exception&gt;</ins>
+</div>
 <!--
 ## Kona 2023 EWG Feedback
 
