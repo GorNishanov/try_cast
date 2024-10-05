@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>exception&lowbar;ptr&lowbar;cast&colon; Add &amp;&amp; &equals; delete overload</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <style type="text/css">
+p {text-align:justify}
+li {text-align:justify}
+blockquote.note
+{
+background-color:#E0E0E0;
+padding-left: 15px;
+padding-right: 15px;
+padding-top: 1px;
+padding-bottom: 1px;
+}
+code
+{
+color:#000000;
+}
+ins {background-color:#A0FFA0}
+del {background-color:#FFA0A0}
+table {border-collapse: collapse;}
+table, th, td {
+border: 1px solid black;
+border-collapse: collapse;
+}
+</style>
+<table>
+<thead>
+<tr>
+<th>Document Number:</th>
+<th>D3416R0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Date:</td>
+<td>2024-09-29</td>
+</tr>
+<tr>
+<td>Target:</td>
+<td>LEWG</td>
+</tr>
+<tr>
+<td>Revises:</td>
+<td></td>
+</tr>
+<tr>
+<td>Reply to:</td>
+<td>Gor Nishanov (<a href="mailto:gorn@microsoft.com">gorn@microsoft.com</a>)</td>
+</tr>
+</tbody>
+</table>
+<h1 id="exception_ptr_cast-add---delete-overload">exception_ptr_cast: Add &amp;&amp; = delete overload</h1>
+<p>An exception_ptr_cast is a facility offered by <a href="https://isocpp.org/files/papers/P2927R2.html">https://isocpp.org/files/papers/P2927R2.html</a>
+to observe an exception stored in exception_ptr.</p>
+<pre><code class="language-c++"><span class="hljs-keyword">namespace</span> std
+{
+  <span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt;
+  <span class="hljs-type">const</span> T* <span class="hljs-title">exception_ptr_cast</span><span class="hljs-params">(<span class="hljs-type">const</span> exception_ptr&amp; e)</span> <span class="hljs-keyword">noexcept</span></span>;
+}
+</code></pre>
+<p>Such a function is dangerous if one passes a temporary <code>std::exception_ptr</code> directly to the exception_ptr_cast.</p>
+<p>For example, given that std::current_exception</p>
+<pre><code class="language-c++"><span class="hljs-function">exception_ptr <span class="hljs-title">current_exception</span><span class="hljs-params">()</span></span>;
+</code></pre>
+<p>is allowed to return a copy of the currently handled
+exception and if it is the case, the object referenced by the exception_ptr will be destroyed when the exception_ptr is destroyed. Thus the following innocuous code</p>
+<pre><code class="language-c++"><span class="hljs-keyword">if</span> (<span class="hljs-keyword">auto</span> *ex = std::<span class="hljs-built_in">exception_ptr_cast</span>&lt;std::system_error&gt;(std::<span class="hljs-built_in">current_exception</span>())) {
+  <span class="hljs-built_in">handle</span>(ex-&gt;code); <span class="hljs-comment">// &lt;--- Use after free!!!</span>
+}
+</code></pre>
+<p>will result in <strong>use after free</strong> on Windows, as <code>std::current_exception</code> creates a copy of an exception,
+as the real one is allocated on the stack at the point of throw.</p>
+<h2 id="delete-rvalue-overload">Delete rvalue overload</h2>
+<p>We can take an approach taken by several standard library facilities, such as:</p>
+<pre><code class="language-c++"><span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; <span class="hljs-type">const</span> T* <span class="hljs-title">addressof</span><span class="hljs-params">(<span class="hljs-type">const</span> T&amp;&amp;)</span> </span>= <span class="hljs-keyword">delete</span>;
+<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; <span class="hljs-type">void</span> <span class="hljs-title">as_const</span><span class="hljs-params">(<span class="hljs-type">const</span> T&amp;&amp;)</span> </span>= <span class="hljs-keyword">delete</span>;
+<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; <span class="hljs-type">void</span> <span class="hljs-title">ref</span><span class="hljs-params">(<span class="hljs-type">const</span> T&amp;&amp;)</span> </span>= <span class="hljs-keyword">delete</span>;
+<span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt; <span class="hljs-type">void</span> <span class="hljs-title">cref</span><span class="hljs-params">(<span class="hljs-type">const</span> T&amp;&amp;)</span> </span>= <span class="hljs-keyword">delete</span>;
+<span class="hljs-comment">// and others, like regex_iterators, etc.</span>
+</code></pre>
+<p>that delete an overload taking rvalue reference to preventing accidental use of temporaries.</p>
+<p>While we acknowledge that value category is not a lifetime, it is
+often strongly suggestive of one and thus allows us to eliminate an
+obvious mistake when composing exception_ptr_cast and current_exception.</p>
+<p>Delete the overload will catch the misuse of exception_ptr_cast and current_exception and the user will have to correct the code by
+writing:</p>
+<pre><code class="language-c++"><span class="hljs-keyword">auto</span> e = std::<span class="hljs-built_in">current_exception</span>();
+<span class="hljs-keyword">if</span> (<span class="hljs-keyword">auto</span>* ex = std::<span class="hljs-built_in">exception_ptr_cast</span>&lt;std::system_error&gt;(e)) {
+    <span class="hljs-built_in">handle</span>(ex-&gt;code); <span class="hljs-comment">// Safe, no temporary</span>
+}
+</code></pre>
+<h2 id="other-alternatives-considered">Other alternatives considered</h2>
+<p>Another approach would be to modify the signature of exception_ptr_cast to
+take the exception_ptr by pointer:</p>
+<pre><code class="language-C++"><span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt;
+<span class="hljs-type">const</span> T* <span class="hljs-title">exception_ptr_cast</span><span class="hljs-params">(<span class="hljs-type">const</span> exception_ptr* e)</span> <span class="hljs-keyword">noexcept</span></span>;
+</code></pre>
+<p>or by reference (like any_cast):</p>
+<pre><code class="language-C++"><span class="hljs-function"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">class</span> T&gt;
+<span class="hljs-type">const</span> T* <span class="hljs-title">exception_ptr_cast</span><span class="hljs-params">(exception_ptr&amp; e)</span> <span class="hljs-keyword">noexcept</span></span>;
+</code></pre>
+<p>In both cases, we offer a less compelling interface, that raises questions,
+why do we take a pointer to exception_ptr? Does it make sense to pass
+null to this API? And, in the second case, does the API mutate the passed in exception_ptr?</p>
+<p>The answer to all these questions is no, making the pointer/reference change is semantically unnecessary. We only changed the API to lessen the chance of obtaining a dangling pointer.</p>
+<p>The approach of taking an exception_ptr by const&amp; and delete-ing
+rvalue reference is addressing the problem directly without changing the API.</p>
+<p>One argument against the deleting an overload that we will
+prevent some compelling code from working, however we are not aware
+of what such compelling code would be.</p>
+<p>Another objecting would be that it can create a false sense of security
+and will not catch all cases of dangling.</p>
+<p>While we agree that it won't catch all mistakes, it handles low-hanging
+fruit of misusing interacting with the most likely facility exception_ptr_cast will be interacting with, namely, current_exception.</p>
+<h2 id="wording">Wording</h2>
+<p>Modify the wording offered by <a href="https://isocpp.org/files/papers/P2927R2.html">https://isocpp.org/files/papers/P2927R2.html</a>
+by changing synopsis to:</p>
+<div style="margin-left: 30px;">
+<code>
+exception_ptr current_exception() noexcept;<br>
+[[noreturn]] void rethrow_exception(exception_ptr p);<br>
+template &lt;class E&gt;<br>
+&nbsp;&nbsp;const E* exception_ptr_cast(const exception_ptr& p) noexcept;
+<br>
+<ins>
+template &lt;class E&gt;<br>
+&nbsp;&nbsp;void exception_ptr_cast(const exception_ptr&&) = delete;
+</ins><br>
+template &lt;class T&gt; [[noreturn]] void throw_with_nested(T&& t);
+</code>
+</div>
+<p></p>
+<h2 id="acknowledgments">Acknowledgments</h2>
+<p>Many thanks to Lewis Baker, who raised the concern and offered this
+approach to address it and to Arthur O'Dwyer who have
+written a thoughtful blogpost of why this is not a good idea.</p>
+<h2 id="references">References</h2>
+<p><a href="https://isocpp.org/files/papers/P2927R2.html">https://isocpp.org/files/papers/P2927R2.html</a> Inspecting exception_ptr</p>
+<p><a href="https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151">https://github.com/scylladb/scylladb/blob/946d281/utils/exceptions.hh#L128-L151</a> ScyllaDb</p>
+<p><a href="https://quuxplusone.github.io/blog/2024/07/03/dont-delete-const-refref/">https://quuxplusone.github.io/blog/2024/07/03/dont-delete-const-refref/</a> Don't delete &amp;&amp;</p>
+<p><a href="https://quuxplusone.github.io/blog/2019/03/11/value-category-is-not-lifetime/">https://quuxplusone.github.io/blog/2019/03/11/value-category-is-not-lifetime/</a> Value Category is not liftime</p>
+<p><a href="https://abseil.io/tips/149">https://abseil.io/tips/149</a> Tip of the Week #149: Object Lifetimes vs. = delete</p>
+
+            
+            
+        </body>
+        </html>

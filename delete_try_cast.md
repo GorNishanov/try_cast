@@ -22,7 +22,7 @@ border-collapse: collapse;
 }
 </style>
 
-| Document Number: | dXXXXr0            |
+| Document Number: | D3416R0            |
 | ---------------- | ------------------ |
 | Date:            | 2024-09-29          |
 | Target:          | LEWG               |
@@ -109,9 +109,7 @@ const T* exception_ptr_cast(exception_ptr& e) noexcept;
 
 In both cases, we offer a less compelling interface, that raises questions,
 why do we take a pointer to exception_ptr? Does it make sense to pass
-null to this API?
-
-And, in the second case, does the API mutate the passed in exception_ptr?
+null to this API? And, in the second case, does the API mutate the passed in exception_ptr?
 
 The answer to all these questions is no, making the pointer/reference change is semantically unnecessary. We only changed the API to lessen the chance of obtaining a dangling pointer.
 
@@ -143,7 +141,7 @@ template &lt;class E&gt;<br>
 <br>
 <ins>
 template &lt;class E&gt;<br>
-&nbsp;&nbsp;const E* exception_ptr_cast(const exception_ptr&&) = delete;
+&nbsp;&nbsp;void exception_ptr_cast(const exception_ptr&&) = delete;
 </ins><br>
 template &lt;class T&gt; [[noreturn]] void throw_with_nested(T&& t);
 </code>
