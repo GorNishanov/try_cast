@@ -24,8 +24,8 @@ border-collapse: collapse;
 
 | Document Number: | p2927r2            |
 | ---------------- | ------------------ |
-| Date:            | 2024-03-22         |
-| Target:          | LEWG               |
+| Date:            | 2024-04-15         |
+| Target:          | LWG                |
 | Revises:         | p2927r1            |
 | Reply to:        | Arthur O'Dwyer (arthur.j.odwyer@gmail.com), Gor Nishanov (gorn@microsoft.com) |
 
@@ -121,48 +121,39 @@ be optimized by the compilers (see https://wg21.link/p1676),
 no major compiler has implemented any of these
 optimizations since C++ existed.
 
-### Before 
+*[Edit: The following example was added after Tokyo WG21 meeting for the post Tokyo mailing]*
 
-Consider a read_harder routine that wraps an async_read to retry on certain failures upto a limit.
+### Before
 
 ```c++
-task<int> read_harder(my::channel<int>& q) {
-    for (int attempt = 0;; ++attempt) {
-        try {
-            co_return co_await q.async_read();
-        }
-        catch (const std::system_error& e) {
-            if (e.code() == errc::device_or_resource_busy && attempt < 10)
-              continue;
-
-            throw;
-        }
+// Examine the exception stored in exception_ptr and decide if retry is needed.
+bool should_retry(const std::exception_ptr& eptr)
+{
+    try
+    {
+        std::rethrow_exception(eptr);
+    }
+    catch(std::system_error& e)
+    {
+        return e.code() == std::errc::device_or_resource_busy;
+    }
+    catch(...)
+    {
+        return false;
     }
 }
 ```
-
-With the offered facility we can implement the same logic without
-having to rethrow and catch.
 
 ### After
 
 ```c++
-task<int> read_harder(my::channel<int>& q) {
-    for (int attempt = 0;; ++attempt) {
-        auto result = co_await q.async_read().as_expected();
-        if (result)
-           co_return *result;
-
-        if (auto* e = std::exception_ptr_cast<system_error>(result.error());
-           e->code() == errc::device_or_resource_busy && attempt < 10)
-           continue;
-
-        std::rethrow_exception(result.error());
-    }
+// Examine the exception stored in exception_ptr and decide if retry is needed.
+bool should_retry(const std::exception_ptr& eptr)
+{
+    auto* e = std::exception_ptr_cast<std::system_error>(eptr);
+    return e && e->code() == std::errc::device_or_resource_busy;
 }
 ```
-Similar code size, but, significantly faster. This code assumes the existence of an adapter algorithm that converts `sender<T>` to `sender<expected<T, exception_ptr>>`
-
 
 ## Simplification post Kona 2023
 
@@ -520,3 +511,21 @@ const_cast<int*>(exception_ptr_cast<int>(eptr))
 
 
 -->
+
+```sql
+SUBMIT TASK etl AS
+WITH input AS (SELECT processed_content_location as x, 0, 1, 'text' FROM episodevideos2 WHERE video_id = '123')
+EXECUTE GenerateShort(input, 's3://bucket')
+```
+
+
+1. What is the recent technology you learned
+2. What is the most exciting thing you learned in the last few years
+3. When you work on a project from scratch, how do you approach it
+4. Something about C++, other programming languages
+5. What is the most challenging thing that you had to struggle with in the last few years
+6. kubernetes
+7. Windows threadpool
+8. testing, TDD, etc
+9. multi-repo, uni-repo. build systems, packaging
+

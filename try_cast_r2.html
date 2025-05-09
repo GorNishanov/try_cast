@@ -171,11 +171,11 @@ border-collapse: collapse;
 <tbody>
 <tr>
 <td>Date:</td>
-<td>2024-03-22</td>
+<td>2024-04-15</td>
 </tr>
 <tr>
 <td>Target:</td>
-<td>LEWG</td>
+<td>LWG</td>
 </tr>
 <tr>
 <td>Revises:</td>
@@ -268,40 +268,33 @@ While theoretically, some exception patterns could
 be optimized by the compilers (see <a href="https://wg21.link/p1676">https://wg21.link/p1676</a>),
 no major compiler has implemented any of these
 optimizations since C++ existed.</p>
+<p><em>[Edit: The following example was added after Tokyo WG21 meeting for the post Tokyo mailing]</em></p>
 <h3 id="before">Before</h3>
-<p>Consider a read_harder routine that wraps an async_read to retry on certain failures upto a limit.</p>
-<pre><code class="language-c++"><span class="hljs-function">task&lt;<span class="hljs-type">int</span>&gt; <span class="hljs-title">read_harder</span><span class="hljs-params">(my::channel&lt;<span class="hljs-type">int</span>&gt;&amp; q)</span> </span>{
-    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> attempt = <span class="hljs-number">0</span>;; ++attempt) {
-        <span class="hljs-keyword">try</span> {
-            <span class="hljs-keyword">co_return</span> <span class="hljs-keyword">co_await</span> q.<span class="hljs-built_in">async_read</span>();
-        }
-        <span class="hljs-built_in">catch</span> (<span class="hljs-type">const</span> std::system_error&amp; e) {
-            <span class="hljs-keyword">if</span> (e.<span class="hljs-built_in">code</span>() == errc::device_or_resource_busy &amp;&amp; attempt &lt; <span class="hljs-number">10</span>)
-              <span class="hljs-keyword">continue</span>;
-
-            <span class="hljs-keyword">throw</span>;
-        }
+<pre><code class="language-c++"><span class="hljs-comment">// Examine the exception stored in exception_ptr and decide if retry is needed.</span>
+<span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">should_retry</span><span class="hljs-params">(<span class="hljs-type">const</span> std::exception_ptr&amp; eptr)</span>
+</span>{
+    <span class="hljs-keyword">try</span>
+    {
+        std::<span class="hljs-built_in">rethrow_exception</span>(eptr);
+    }
+    <span class="hljs-built_in">catch</span>(std::system_error&amp; e)
+    {
+        <span class="hljs-keyword">return</span> e.<span class="hljs-built_in">code</span>() == std::errc::device_or_resource_busy;
+    }
+    <span class="hljs-built_in">catch</span>(...)
+    {
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;
     }
 }
 </code></pre>
-<p>With the offered facility we can implement the same logic without
-having to rethrow and catch.</p>
 <h3 id="after">After</h3>
-<pre><code class="language-c++"><span class="hljs-function">task&lt;<span class="hljs-type">int</span>&gt; <span class="hljs-title">read_harder</span><span class="hljs-params">(my::channel&lt;<span class="hljs-type">int</span>&gt;&amp; q)</span> </span>{
-    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> attempt = <span class="hljs-number">0</span>;; ++attempt) {
-        <span class="hljs-keyword">auto</span> result = <span class="hljs-keyword">co_await</span> q.<span class="hljs-built_in">async_read</span>().<span class="hljs-built_in">as_expected</span>();
-        <span class="hljs-keyword">if</span> (result)
-           <span class="hljs-keyword">co_return</span> *result;
-
-        <span class="hljs-keyword">if</span> (<span class="hljs-keyword">auto</span>* e = std::<span class="hljs-built_in">exception_ptr_cast</span>&lt;system_error&gt;(result.<span class="hljs-built_in">error</span>());
-           e-&gt;<span class="hljs-built_in">code</span>() == errc::device_or_resource_busy &amp;&amp; attempt &lt; <span class="hljs-number">10</span>)
-           <span class="hljs-keyword">continue</span>;
-
-        std::<span class="hljs-built_in">rethrow_exception</span>(result.<span class="hljs-built_in">error</span>());
-    }
+<pre><code class="language-c++"><span class="hljs-comment">// Examine the exception stored in exception_ptr and decide if retry is needed.</span>
+<span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">should_retry</span><span class="hljs-params">(<span class="hljs-type">const</span> std::exception_ptr&amp; eptr)</span>
+</span>{
+    <span class="hljs-keyword">auto</span>* e = std::<span class="hljs-built_in">exception_ptr_cast</span>&lt;std::system_error&gt;(eptr);
+    <span class="hljs-keyword">return</span> e &amp;&amp; e-&gt;<span class="hljs-built_in">code</span>() == std::errc::device_or_resource_busy;
 }
 </code></pre>
-<p>Similar code size, but, significantly faster. This code assumes the existence of an adapter algorithm that converts <code>sender&lt;T&gt;</code> to <code>sender&lt;expected&lt;T, exception_ptr&gt;&gt;</code></p>
 <h2 id="simplification-post-kona-2023">Simplification post Kona 2023</h2>
 <p>Previous revision tentatively proposed a complicated signature imitating the syntax of a catch-parameter, as in <code>old::exception_ptr_cast&lt;const std::exception&amp;&gt;(p)</code>.
 In Kona, we were convinced to simplify the signature to assume catch-by-const-reference no matter what: <code>std::exception_ptr_cast&lt;std::exception&gt;(p)</code>.</p>
@@ -616,6 +609,21 @@ const_cast<int*>(exception_ptr_cast<int>(eptr))
 
 
 -->
+<pre><code class="language-sql">SUBMIT TASK etl <span class="hljs-keyword">AS</span>
+<span class="hljs-keyword">WITH</span> input <span class="hljs-keyword">AS</span> (<span class="hljs-keyword">SELECT</span> processed_content_location <span class="hljs-keyword">as</span> x, <span class="hljs-number">0</span>, <span class="hljs-number">1</span>, <span class="hljs-string">&#x27;text&#x27;</span> <span class="hljs-keyword">FROM</span> episodevideos2 <span class="hljs-keyword">WHERE</span> video_id <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;123&#x27;</span>)
+<span class="hljs-keyword">EXECUTE</span> GenerateShort(input, <span class="hljs-string">&#x27;s3://bucket&#x27;</span>)
+</code></pre>
+<ol>
+<li>What is the recent technology you learned</li>
+<li>What is the most exciting thing you learned in the last few years</li>
+<li>When you work on a project from scratch, how do you approach it</li>
+<li>Something about C++, other programming languages</li>
+<li>What is the most challenging thing that you had to struggle with in the last few years</li>
+<li>kubernetes</li>
+<li>Windows threadpool</li>
+<li>testing, TDD, etc</li>
+<li>multi-repo, uni-repo. build systems, packaging</li>
+</ol>
 
             
             
