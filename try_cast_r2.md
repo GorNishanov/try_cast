@@ -22,11 +22,11 @@ border-collapse: collapse;
 }
 </style>
 
-| Document Number: | p2927r3            |
+| Document Number: | p2927r2            |
 | ---------------- | ------------------ |
-| Date:            | 2025-05-09         |
+| Date:            | 2024-04-15         |
 | Target:          | LWG                |
-| Revises:         | p2927r2            |
+| Revises:         | p2927r1            |
 | Reply to:        | Arthur O'Dwyer (arthur.j.odwyer@gmail.com), Gor Nishanov (gorn@microsoft.com) |
 
 
@@ -58,8 +58,6 @@ the earlier feedback.
 **r1** - implement "strict" behavior (`exception_ptr_cast<logic_error>`, as opposed to also allowing cv-ref qualified types, as in `exception_ptr_cast<const logic_error&>`, for example)
 
 **r2** - rename to `exception_ptr_cast`, add motivation section, add feature test macro.
-
-**r3** - add `void exception_ptr_cast(const exception_ptr&&a) = delete`
 
 ## Proposal at a glance
 
@@ -368,9 +366,7 @@ exception_ptr current_exception() noexcept;<br>
 [[noreturn]] void rethrow_exception(exception_ptr p);<br>
 <ins>
 template &lt;class E&gt;<br>
-&nbsp;&nbsp;const E* exception_ptr_cast(const exception_ptr& p) noexcept;<br>
-template &lt;class E&gt;<br>
-&nbsp;&nbsp;void exception_ptr_cast(const exception_ptr&&) = delete;<br>
+&nbsp;&nbsp;const E* exception_ptr_cast(const exception_ptr& p) noexcept;
 </ins><br>
 template &lt;class T&gt; [[noreturn]] void throw_with_nested(T&& t);
 </code>
@@ -515,3 +511,45 @@ const_cast<int*>(exception_ptr_cast<int>(eptr))
 
 
 -->
+
+```sql
+SUBMIT TASK etl AS
+WITH input AS (SELECT processed_content_location as x, 0, 1, 'text' FROM episodevideos2 WHERE video_id = '123')
+EXECUTE GenerateShort(input, 's3://bucket')
+```
+
+
+1. What is the recent technology you learned
+2. What is the most exciting thing you learned in the last few years
+3. When you work on a project from scratch, how do you approach it
+4. Something about C++, other programming languages
+5. What is the most challenging thing that you had to struggle with in the last few years
+6. kubernetes
+7. Windows threadpool
+8. testing, TDD, etc
+9. multi-repo, uni-repo. build systems, packaging
+
+
+
+
+
+
+
+
+
+
+
+
+3/8 native support of schema v2 + drain other changes
+3/15 buffer, asks and bug fixes
+3/22 Gor @ Standardization Meeting
+3/28 Documentation + infinity public surface design
+4/5 dmlv2 transpiler design + implementation of schema changes
+4/12 dmlv2 transpiler changes + fit and finish
+4/19 implement asks + bug fixes
+4/26 materialized views consumption
+5/3 non-conformant strings
+5/10 first batch of missing functions
+5/17 array<json> casting support
+5/24 datetime/timestamp/interval types
+5/31 unified grammar
